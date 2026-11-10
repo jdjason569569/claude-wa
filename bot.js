@@ -30,13 +30,26 @@ async function pedirRespuesta(text, clientName) {
   return reply || null;
 }
 
+// open-wa limita a 100 peticiones/min por cliente, y en local todos (el panel /dashboard
+// abierto en Chrome, el bot, curl...) comparten el mismo cupo porque no hay IP. El panel
+// consume casi todo, así que el bot se identifica aparte para tener su propio cupo.
+const API_HEADERS = { 'Content-Type': 'application/json', 'X-Forwarded-For': 'bot-barberia' };
+
 async function enviarTexto(to, content) {
-  const res = await fetch(`${API_URL}/api/messages/sendText`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to, content }),
-  });
-  if (!res.ok) throw new Error(`sendText ${res.status}: ${await res.text()}`);
+  for (let intento = 1; ; intento++) {
+    const res = await fetch(`${API_URL}/api/messages/sendText`, {
+      method: 'POST',
+      headers: API_HEADERS,
+      body: JSON.stringify({ to, content }),
+    });
+    if (res.ok) return;
+    if (res.status === 429 && intento < 4) {
+      console.warn(`⏳ Límite de la API (429), reintento ${intento} en ${intento * 5} s...`);
+      await new Promise((r) => setTimeout(r, intento * 5000));
+      continue;
+    }
+    throw new Error(`sendText ${res.status}: ${await res.text()}`);
+  }
 }
 
 async function manejarMensaje(msg) {
@@ -66,7 +79,7 @@ async function escucharEventos() {
   for (;;) {
     try {
       const res = await fetch(`${API_URL}/api/events`, {
-        headers: { Accept: 'text/event-stream' },
+        headers: { Accept: 'text/event-stream', 'X-Forwarded-For': 'bot-barberia' },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       console.log(`✅ Bot escuchando mensajes en ${API_URL} (backend: ${BACKEND_URL})`);
