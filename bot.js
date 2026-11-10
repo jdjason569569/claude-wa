@@ -18,11 +18,13 @@ const RESPONDER_EN_GRUPOS = false;
 
 // ── Lógica ──────────────────────────────────────────────────────────────
 
-async function pedirRespuesta(text, clientName) {
+// chatId ("...@lid" o "...@c.us") es fijo para cada cliente, a diferencia del nombre: el backend
+// lo usa para no silenciar a otro cliente que se llame igual.
+async function pedirRespuesta(text, clientName, chatId) {
   const res = await fetch(`${BACKEND_URL}/whatsapp/reply`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, clientName }),
+    body: JSON.stringify({ text, clientName, chatId }),
     signal: AbortSignal.timeout(BACKEND_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`backend ${res.status}: ${await res.text()}`);
@@ -65,7 +67,7 @@ async function manejarMensaje(msg) {
   console.log(`📩 ${nombre || chatId}: ${texto}`);
 
   try {
-    const respuesta = await pedirRespuesta(texto, nombre);
+    const respuesta = await pedirRespuesta(texto, nombre, chatId);
     if (!respuesta) return;
     await enviarTexto(chatId, respuesta);
     console.log(`📤 -> ${chatId}: ${respuesta.split('\n')[0]}`);
